@@ -106,6 +106,17 @@ ENV/
 env.bak/
 venv.bak/
 
+# 本地生成产物（含二进制 / 含隐私数据，不应提交）
+# Chroma 向量数据库（由知识库构建脚本生成，体积大且可重建）
+**/vector_store/
+# 对话记忆文件（含真实交互记录，含隐私，勿提交）
+src/ch6/autoGen-test/memory/travel_memory.json
+
+# 个人/工具工作目录（非项目代码，勿提交）
+.workbuddy/
+# 未完成章节（用户要求暂不发布）
+ch7/
+
 # Spyder project settings
 .spyderproject
 .spyproject

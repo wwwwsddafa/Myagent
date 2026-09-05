@@ -1,0 +1,11 @@
+langgraph
+langchain-openai
+langchain-core
+langchain-community
+langchain-text-splitters
+chromadb
+pydantic
+python-dotenv
+tavily-python
+httpx
+requests

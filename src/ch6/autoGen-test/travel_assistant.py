@@ -39,29 +39,27 @@ from tools import (
     TravelMemory,
 )
 
-# 加载环境变量（从项目根目录的 data/.env 加载）
+# 加载环境变量：从当前文件所在目录向上逐层查找 data/.env 或 .env
 def _load_env():
-    """尝试从多个位置加载 .env 文件"""
-    # 获取当前文件绝对路径
+    """从当前文件向上逐层查找 data/.env 或 .env 并加载（兼容任意运行目录）"""
     current_file = os.path.abspath(__file__)
-    current_dir = os.path.dirname(current_file)
+    dir_to_check = os.path.dirname(current_file)
 
-    # 可能的路径列表
-    possible_paths = [
-        os.path.join(current_dir, "data", ".env"),                    # 同级 data/.env
-        os.path.join(os.path.dirname(current_dir), "data", ".env"),   # 上级 data/.env
-        os.path.join(os.path.dirname(os.path.dirname(current_dir)), "data", ".env"),  # 上两级 data/.env
-        os.path.join(os.getcwd(), "data", ".env"),                   # 工作目录 data/.env
-        os.path.join(os.getcwd(), ".env"),                           # 工作目录 .env
-    ]
+    while True:
+        candidates = [
+            os.path.join(dir_to_check, "data", ".env"),
+            os.path.join(dir_to_check, ".env"),
+        ]
+        for path in candidates:
+            if os.path.exists(path):
+                load_dotenv(path, override=True)
+                print(f"✅ 已加载环境变量: {path}")
+                return True
+        parent = os.path.dirname(dir_to_check)
+        if parent == dir_to_check:  # 已到达文件系统根
+            break
+        dir_to_check = parent
 
-    for path in possible_paths:
-        if os.path.exists(path):
-            load_dotenv(path, override=True)
-            print(f"✅ 已加载环境变量: {path}")
-            return True
-
-    # 最后尝试默认加载
     load_dotenv()
     print("⚠️ 未找到 .env 文件，尝试从系统环境变量读取")
     return False
@@ -91,6 +89,7 @@ def create_model_client() -> OpenAIChatCompletionClient:
             "vision": False,
             "function_calling": True,
             "json_output": True,
+            "structured_output": False,
             "family": "unknown",
         },
     )

@@ -2,8 +2,7 @@ from autogen_ext.models.openai import OpenAIChatCompletionClient
 import os
 from autogen_agentchat.agents import (
     AssistantAgent,
-    UserProxyAgent,
-)  # 导入助理智能体类  (AutoGen框架中提供的两类智能体: UserProxyAgent 和 AssistantAgent)
+)  # 导入助理智能体类
 
 from autogen_agentchat.teams import (
     RoundRobinGroupChat,
@@ -14,8 +13,32 @@ from autogen_agentchat.conditions import (
 from autogen_agentchat.ui import Console  # 导入控制台用户界面类
 from dotenv import load_dotenv
 
-# 加载环境变量
-load_dotenv()
+# 加载环境变量：从当前文件所在目录向上逐层查找 data/.env 或 .env
+def _load_env():
+    """从当前文件向上逐层查找 data/.env 或 .env 并加载（兼容任意运行目录）"""
+    current_file = os.path.abspath(__file__)
+    dir_to_check = os.path.dirname(current_file)
+
+    while True:
+        candidates = [
+            os.path.join(dir_to_check, "data", ".env"),
+            os.path.join(dir_to_check, ".env"),
+        ]
+        for path in candidates:
+            if os.path.exists(path):
+                load_dotenv(path, override=True)
+                print(f"✅ 已加载环境变量: {path}")
+                return True
+        parent = os.path.dirname(dir_to_check)
+        if parent == dir_to_check:  # 已到达文件系统根
+            break
+        dir_to_check = parent
+
+    load_dotenv()
+    print("⚠️ 未找到 .env 文件，尝试从系统环境变量读取")
+    return False
+
+_load_env()
 
 import asyncio  # 引入异步库
 
@@ -23,17 +46,24 @@ import asyncio  # 引入异步库
 
 
 def create_openai_model_client():
-    """创建并配置 OpenAI 模型客户端"""
+    """创建 OpenAI 兼容的模型客户端"""
+    api_key = os.getenv("LLM_API_KEY") or os.getenv("OPENAI_API_KEY")
+    base_url = os.getenv("LLM_BASE_URL") or os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
+    model = os.getenv("LLM_MODEL_ID") or os.getenv("MODEL_NAME", "gpt-4o")
+
+    if not api_key:
+        raise ValueError("未找到 API Key，请设置 LLM_API_KEY 或 OPENAI_API_KEY 环境变量")
+
     return OpenAIChatCompletionClient(
-        model=os.getenv("LLM_MODEL_ID", "gpt-4o"),
-        api_key=os.getenv("LLM_API_KEY"),
-        base_url=os.getenv("LLM_BASE_URL", "https://api.openai.com/v1"),
-        # ******************* 注意这里使用的是第三方openAI兼容API，需要设置model_info
+        model=model,
+        api_key=api_key,
+        base_url=base_url,
         model_info={
-            "vision": False,  # 不支持视觉功能
-            "function_calling": True,  # 支持函数调用
-            "json_output": True,  # 支持JSON输出
-            "family": "unknown",  # 未知模型家族
+            "vision": False,
+            "function_calling": True,
+            "json_output": True,
+            "structured_output": False,
+            "family": "unknown",
         },
     )
 
@@ -114,17 +144,19 @@ def create_code_reviewer(model_client):
     )
 
 
-def create_user_proxy():
+def create_user_proxy(model_client):
     """创建用户代理智能体"""
-    return UserProxyAgent(
-        name="UserProxy",
-        description="""用户代理，负责以下职责:
+    system_message = """你是用户代理，负责以下职责:
 1. 代表用户提出开发需求
 2. 执行最终的代码实现
 3. 验证功能是否符合预期
 4. 提供用户反馈和建议
 
-完成测试后请回复 TERMINATE。""",
+完成测试后请回复 TERMINATE。"""
+    return AssistantAgent(
+        name="UserProxy",
+        model_client=model_client,
+        system_message=system_message,
     )
 
 
@@ -138,7 +170,7 @@ async def run_software_development_team():
     product_manager = create_product_manager(model_client)
     engineer = create_engineer(model_client)
     code_reviewer = create_code_reviewer(model_client)
-    user_proxy = create_user_proxy()
+    user_proxy = create_user_proxy(model_client)
     # 添加终止条件
     termination = TextMentionTermination("TERMINATE")
     # 创建基于轮询聊天机制的团队聊天
